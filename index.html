@@ -1,316 +1,61 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediConnect - منصة الحجز الطبي المتكاملة (البصرة)</title>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-    <style>
-        :root {
-            --primary: #007bff;
-            --primary-dark: #0056b3;
-            --secondary: #2c3e50;
-            --accent: #28a745;
-            --danger: #dc3545;
-            --warning: #ffc107;
-            --light: #f8f9fa;
-            --dark: #343a40;
-            --glass: rgba(255, 255, 255, 0.95);
-            --shadow: 0 10px 30px rgba(0,0,0,0.1);
-            --radius: 16px;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; }
-        body { background-color: #f0f2f5; color: var(--secondary); overflow-x: hidden; min-height: 100vh; }
-
-        /* --- UI Components --- */
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-success { background: var(--accent); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
-        .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
-
-        .input-group { margin-bottom: 15px; }
-        .input-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
-        .input-group input, .input-group select, .input-group textarea {
-            width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.95rem;
-        }
-        .input-group input:focus { border-color: var(--primary); outline: none; }
-
-        /* --- Layout --- */
-        #app { display: flex; flex-direction: column; height: 100vh; }
-        header { background: var(--glass); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .logo { font-size: 1.4rem; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; }
-        
-        main { flex: 1; position: relative; overflow: hidden; }
-        .view { display: none; height: 100%; overflow-y: auto; padding: 20px; animation: fadeIn 0.4s; }
-        .view.active { display: block; }
-        
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* --- Map View --- */
-        .dashboard-container { height: calc(100vh - 70px); position: relative; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
-        #map { height: 100%; width: 100%; z-index: 1; }
-        .filters-panel {
-            position: absolute; top: 20px; right: 20px; background: var(--glass); padding: 20px;
-            border-radius: var(--radius); width: 280px; z-index: 500; box-shadow: var(--shadow); backdrop-filter: blur(10px);
-        }
-
-        /* --- Modals --- */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000;
-        }
-        .modal {
-            background: white; padding: 30px; border-radius: var(--radius); width: 95%; max-width: 600px;
-            max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-        }
-        
-        /* --- Prescription Styles --- */
-        .med-item-card {
-            background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px; position: relative;
-        }
-        .med-item-row { display: flex; gap: 10px; margin-bottom: 10px; }
-        .med-notes-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-        .tag-label { font-size: 0.85rem; display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 4px 8px; background: white; border: 1px solid #ccc; border-radius: 4px; }
-        .tag-label:hover { background: var(--light); }
-        
-        .prescription-view {
-            background: white; border: 2px dashed #ccc; padding: 20px; margin-top: 20px; border-radius: 10px; font-family: 'Courier New', monospace; direction: ltr; text-align: left;
-        }
-        .prescription-header-ar { text-align: center; direction: rtl; font-family: 'Tajawal', sans-serif; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-
-        /* --- Notification --- */
-        .toast {
-            position: fixed; bottom: 20px; left: 20px; background: var(--dark); color: white; padding: 12px 20px; border-radius: 8px; z-index: 3000; display: flex; gap: 10px; align-items: center;
-        }
-        .location-picker-msg {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 50px; z-index: 1000; pointer-events: none;
-        }
-
-        .appointment-item {
-            display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;
-        }
-    </style>
-</head>
-<body>
-
-<div id="app">
-    <header>
-        <div class="logo"><i class="fa-solid fa-staff-snake"></i> MediConnect - البصرة</div>
-        <nav style="display:flex; gap:20px;">
-            <button class="btn btn-outline" onclick="router.navigate('home')">الرئيسية</button>
-            <button class="btn btn-outline" onclick="router.navigate('admin')">الإدارة</button>
-        </nav>
-        <button class="btn btn-primary" onclick="ui.openModal('register-modal')"><i class="fa-solid fa-plus"></i> تسجيل عيادة</button>
-    </header>
-
-    <main>
-        <!-- Home / Map -->
-        <section id="view-home" class="view active">
-            <div class="dashboard-container">
-                <div class="filters-panel">
-                    <h4><i class="fa-solid fa-filter"></i> البحث</h4>
-                    <div class="input-group">
-                        <select id="filter-specialty">
-                            <option value="all">الكل</option>
-                            <option value="hospital">مستشفيات</option>
-                            <option value="clinic">عيادات</option>
-                            <option value="pharmacy">صيدليات</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>مزامنة بيانات Google</label>
-                        <button class="btn btn-success" style="width:100%" onclick="mapManager.syncGoogle()">
-                            <i class="fa-brands fa-google"></i> تحديث البيانات الحية
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="picker-msg" class="location-picker-msg" style="display:none;">
-                    انقر على الخريطة لتحديد الموقع
-                </div>
-                <div id="map"></div>
-            </div>
-        </section>
-
-        <!-- Clinic Dashboard -->
-        <section id="view-clinic" class="view">
-            <div id="clinic-dynamic-content"></div>
-        </section>
-    </main>
-</div>
-
-<!-- Modals -->
-<!-- Register Modal -->
-<div class="modal-overlay" id="register-modal">
-    <div class="modal">
-        <h3>تسجيل عيادة جديدة</h3>
-        <form onsubmit="auth.registerClinic(event)">
-            <div class="input-group">
-                <label>اسم العيادة</label>
-                <input type="text" id="reg-name" required>
-            </div>
-            <div class="input-group">
-                <label>النوع</label>
-                <select id="reg-type">
-                    <option value="hospital">مستشفى</option>
-                    <option value="clinic">عيادة</option>
-                    <option value="pharmacy">صيدلية</option>
-                </select>
-            </div>
-            <div class="input-group">
-                <label>الموقع</label>
-                <button type="button" class="btn btn-outline" style="width:100%; margin-bottom:10px;" onclick="mapManager.startLocationPick()">اختر من الخريطة</button>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="reg-lat" placeholder="Lat" readonly>
-                    <input type="text" id="reg-lng" placeholder="Lng" readonly>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width:100%">تسجيل</button>
-            <button type="button" class="btn btn-danger" style="width:100%; margin-top:10px;" onclick="ui.closeModal('register-modal')">إلغاء</button>
-        </form>
-    </div>
-</div>
-
-<!-- Prescription Modal -->
-<div class="modal-overlay" id="prescription-modal">
-    <div class="modal">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h3><i class="fa-solid fa-file-prescription"></i> إصدار وصفة طبية</h3>
-            <i class="fa-solid fa-times" style="cursor:pointer; font-size:1.5rem" onclick="ui.closeModal('prescription-modal')"></i>
-        </div>
-
-        <div id="medicines-list">
-            <!-- Medicines will be added here -->
-        </div>
-
-        <button class="btn btn-outline" style="width:100%; margin-bottom:20px;" onclick="clinicSystem.addMedicineRow()">
-            <i class="fa-solid fa-plus-circle"></i> إضافة دواء آخر
-        </button>
-
-        <button class="btn btn-success" style="width:100%" onclick="clinicSystem.finalizePrescription()">
-            <i class="fa-solid fa-check"></i> إصدار الوصفة (إنشاء الصورة)
-        </button>
-    </div>
-</div>
-
-<!-- Ticket View (Shows after finalizing) -->
-<div class="modal-overlay" id="ticket-modal">
-    <div class="modal" style="max-width:500px;">
-        <div class="prescription-view" id="ticket-content">
-            <!-- Dynamic Content -->
-        </div>
-        <div style="text-align:center; margin-top:20px;">
-            <button class="btn btn-primary" onclick="window.print()">طباعة الوصفة</button>
-            <button class="btn btn-outline" onclick="ui.closeModal('ticket-modal')">إغلاق</button>
-        </div>
-    </div>
-</div>
-
-<!-- Toast Container -->
-<div id="toast-container"></div>
-
+<!-- Scripts -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // --- DATA LAYER (Extended Basra Database) ---
-    const DB_KEY = 'mediconnect_basra_v4';
-    
-    // Mock Data: Simulating a "Google Search" result for Basra
-    const seedData = {
-        clinics: [
-            // Hospitals
-            { id: 1, name: "مستشفى البصرة العام", type: "hospital", lat: 30.5112, lng: 47.8192, owner: "وزارة الصحة", status: "active", available: true },
-            { id: 2, name: "مستشفى الطب النفسي", type: "hospital", lat: 30.4950, lng: 47.7900, owner: "وزارة الصحة", status: "active", available: true },
-            { id: 3, name: "مستشفى الزبير الجمهوري", type: "hospital", lat: 30.3733, lng: 47.6950, owner: "وزارة الصحة", status: "active", available: true },
-            { id: 4, name: "مستشفى ابن سينا التعليمي", type: "hospital", lat: 30.5250, lng: 47.7700, owner: "جامعة البصرة", status: "active", available: true },
-            
-            // Clinics
-            { id: 5, name: "عيادة الدكتور العذاري", type: "clinic", lat: 30.5081, lng: 47.7835, owner: "د. محمد", status: "active", available: true },
-            { id: 6, name: "مركز قلب البصرة", type: "clinic", lat: 30.5150, lng: 47.7950, owner: "د. هاشم", status: "active", available: false },
-            { id: 7, name: "عيادة الأطفال الرحمة", type: "clinic", lat: 30.4800, lng: 47.7800, owner: "د. سارة", status: "active", available: true },
-            { id: 8, name: "عيادة العيون الحديثة", type: "clinic", lat: 30.5200, lng: 47.8100, owner: "د. كريم", status: "active", available: true },
-            
-            // Pharmacies (Distributed)
-            { id: 9, name: "صيدلية الأندلس", type: "pharmacy", lat: 30.5050, lng: 47.7750, owner: "أحمد", status: "active", available: true },
-            { id: 10, name: "صيدلية النخبة", type: "pharmacy", lat: 30.5100, lng: 47.8000, owner: "علي", status: "active", available: true },
-            { id: 11, name: "صيدلية السلام", type: "pharmacy", lat: 30.4700, lng: 47.7600, owner: "حسين", status: "active", available: true },
-            { id: 12, name: "صيدلية الشفا - فرع القبلة", type: "pharmacy", lat: 30.5300, lng: 47.8200, owner: "محمود", status: "active", available: true },
-            
-            // More Private Clinics
-            { id: 13, name: "عيادة الجلدية والليزر", type: "clinic", lat: 30.5120, lng: 47.7900, owner: "د. لينا", status: "active", available: true },
-            { id: 14, name: "مركز العلاج الطبيعي", type: "clinic", lat: 30.4900, lng: 47.7850, owner: "د. فهد", status: "active", available: true },
-            { id: 15, name: "عيادة السكر والغدد", type: "clinic", lat: 30.5180, lng: 47.8150, owner: "د. رغد", status: "active", available: true }
-        ],
-        appointments: [],
-        prescriptions: []
-    };
-
-    const localDB = {
-        getData: () => {
-            const data = localStorage.getItem(DB_KEY);
-            return data ? JSON.parse(data) : seedData;
+    // --- API OBJECT (يتحدث مع السيرفر) ---
+    const api = {
+        getClinics: async () => {
+            const res = await fetch('/api/clinics');
+            const data = await res.json();
+            return data.data;
         },
-        saveData: (data) => localStorage.setItem(DB_KEY, JSON.stringify(data)),
-        getClinics: () => localDB.getData().clinics,
-        addClinic: (c) => {
-            const d = localDB.getData(); c.id = Date.now(); d.clinics.push(c); localDB.saveData(d);
+        addClinic: async (clinic) => {
+            const res = await fetch('/api/clinics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(clinic)
+            });
+            return await res.json();
         },
-        deleteClinic: (id) => {
-            const d = localDB.getData(); d.clinics = d.clinics.filter(c => c.id != id); localDB.saveData(d);
+        deleteClinic: async (id) => {
+            const res = await fetch(`/api/clinics/${id}`, { method: 'DELETE' });
+            return await res.json();
         },
-        addPrescription: (rx) => {
-            const d = localDB.getData(); rx.id = Date.now(); d.prescriptions.push(rx); localDB.saveData(d);
+        addPrescription: async (rx) => {
+            const res = await fetch('/api/prescriptions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(rx)
+            });
+            return await res.json();
         }
     };
 
-    // --- UTILS ---
-    const ui = {
-        showToast: (msg, type='success') => {
-            const el = document.createElement('div');
-            el.className = 'toast';
-            el.innerHTML = `<i class="fa-solid ${type==='success'?'fa-check-circle':'fa-exclamation-circle'}"></i> ${msg}`;
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 3000);
-        },
-        openModal: (id) => document.getElementById(id).style.display = 'flex',
-        closeModal: (id) => document.getElementById(id).style.display = 'none'
-    };
-
-    const router = {
-        currentView: 'home',
-        navigate: (view, params) => {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(`view-${view}`).classList.add('active');
-            if(view === 'home') mapManager.renderMarkers();
-            if(view === 'clinic' && params) clinicSystem.renderDashboard(params);
-        }
-    };
-
-    // --- MAP SYSTEM ---
-    window.tempPickedCoords = null;
+    // --- MAP MANAGER ---
     const mapManager = {
         mapInstance: null,
         markers: [],
         isPicking: false,
+        clinicsData: [], // تخزين البيانات محلياً مؤقتاً للعرض السريع
         
         initMap: () => {
             mapManager.mapInstance = L.map('map').setView([30.5081, 47.7835], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapManager.mapInstance);
+            
             mapManager.mapInstance.on('click', (e) => {
                 if(mapManager.isPicking) mapManager.confirmLocationPick(e.latlng);
             });
         },
 
-        renderMarkers: () => {
+        renderMarkers: async () => {
+            // جلب البيانات الحقيقية من السيرفر
+            mapManager.clinicsData = await api.getClinics();
+            
+            // مسح العلامات القديمة
             mapManager.markers.forEach(m => mapManager.mapInstance.removeLayer(m));
             mapManager.markers = [];
-            localDB.getClinics().forEach(c => {
+
+            // رسم العلامات الجديدة
+            mapManager.clinicsData.forEach(c => {
                 const typeIcons = { hospital: 'fa-hospital', clinic: 'fa-stethoscope', pharmacy: 'fa-prescription-bottle' };
                 const color = c.type === 'pharmacy' ? 'var(--accent)' : 'var(--primary)';
                 
@@ -346,32 +91,16 @@
                 document.getElementById('reg-lat').value = window.tempPickedCoords.lat;
                 document.getElementById('reg-lng').value = window.tempPickedCoords.lng;
             }, 100);
-        },
-
-        syncGoogle: () => {
-            ui.showToast('جاري الاتصال بـ Google Maps للبحث...', 'success');
-            setTimeout(() => {
-                // Simulate finding more data
-                const d = localDB.getData();
-                d.clinics.push(
-                    { id: Date.now(), name: "مختبر التحاليل الدقيقة", type: "pharmacy", lat: 30.5400, lng: 47.8400, owner: "المختبر", status: "active", available: true },
-                    { id: Date.now()+1, name: "عيادة الأسنان التجميلية", type: "clinic", lat: 30.4850, lng: 47.7950, owner: "د. نور", status: "active", available: true }
-                );
-                localDB.saveData(d);
-                mapManager.renderMarkers();
-                ui.showToast('تم العثور على مواقع جديدة وحفظها!');
-            }, 2000);
         }
     };
 
-    // --- CLINIC SYSTEM (Prescription Logic) ---
+    // --- CLINIC SYSTEM ---
     const clinicSystem = {
         currentClinicId: null,
 
         renderDashboard: (id) => {
             clinicSystem.currentClinicId = id;
-            const c = localDB.getData().clinics.find(x => x.id == id);
-            const appts = localDB.getData().appointments.filter(a => a.clinicId == id);
+            const c = mapManager.clinicsData.find(x => x.id == id); // جلب من البيانات المحملة
             
             document.getElementById('clinic-dynamic-content').innerHTML = `
                 <div style="background:white; padding:20px; border-radius:10px; margin-bottom:20px; display:flex; justify-content:space-between;">
@@ -383,19 +112,13 @@
                         <i class="fa-solid fa-file-prescription"></i> صرف وصفة جديدة
                     </button>
                 </div>
-                <h3>قائمة الحجوزات</h3>
-                ${appts.length === 0 ? '<p>لا توجد حجوزات</p>' : appts.map(a => `
-                    <div class="appointment-item">
-                        <span>${a.patientName} (${a.patientAge} سنة)</span>
-                        <button class="btn btn-primary btn-sm">تفاصيل</button>
-                    </div>
-                `).join('')}
+                <p>بيانات العيادة محدثة من السيرفر.</p>
             `;
         },
 
         openPrescriptionModal: () => {
             document.getElementById('medicines-list').innerHTML = '';
-            clinicSystem.addMedicineRow(); // Add first row
+            clinicSystem.addMedicineRow();
             ui.openModal('prescription-modal');
         },
 
@@ -408,111 +131,106 @@
                         <select style="flex:1">
                             <option>1x يومياً</option>
                             <option>2x يومياً</option>
-                            <option>3x يومياً</option>
-                            <option>عند اللزوم</option>
-                        </select>
-                        <select style="flex:1">
-                            <option>قبل الأكل</option>
-                            <option>بعد الأكل</option>
-                            <option>أثناء الأكل</option>
                         </select>
                         <button class="btn btn-danger btn-sm" onclick="document.getElementById('med-row-${id}').remove()">X</button>
-                    </div>
-                    <div class="med-notes-tags">
-                        <label class="tag-label"><input type="checkbox"> حفظ في الثلاجة</label>
-                        <label class="tag-label"><input type="checkbox"> رج قبل الاستخدام</label>
-                        <label class="tag-label"><input type="checkbox"> يسبب النعاس</label>
-                        <input type="text" placeholder="ملاحظة إضافية..." style="width:100%; margin-top:5px; padding:5px;">
                     </div>
                 </div>
             `;
             document.getElementById('medicines-list').insertAdjacentHTML('beforeend', html);
         },
 
-        finalizePrescription: () => {
+        finalizePrescription: async () => {
             const rows = document.querySelectorAll('.med-item-card');
-            if(rows.length === 0) return alert('يجب إضافة دواء واحد على الأقل');
-
             const medicines = [];
             rows.forEach(r => {
-                const inputs = r.querySelectorAll('input[type="text"], select');
-                const checkboxes = r.querySelectorAll('input[type="checkbox"]:checked');
-                let notes = Array.from(checkboxes).map(c => c.parentElement.innerText).join(', ');
-                if(r.querySelector('input[placeholder="ملاحظة إضافية..."]').value) {
-                    notes += " | " + r.querySelector('input[placeholder="ملاحظة إضافية..."]').value;
-                }
-
                 medicines.push({
-                    name: inputs[0].value,
-                    freq: inputs[1].value,
-                    time: inputs[2].value,
-                    notes: notes
+                    name: r.querySelector('input').value,
+                    freq: r.querySelector('select').value
                 });
             });
 
-            const clinic = localDB.getData().clinics.find(c => c.id == clinicSystem.currentClinicId);
-            
-            // Generate Ticket HTML
-            const ticketHtml = `
-                <div class="prescription-header-ar">
-                    <h2>${clinic.name}</h2>
-                    <p>${clinic.owner} | ${new Date().toLocaleDateString('ar-SA')}</p>
-                    <p>رقم الوصفة: ${Math.floor(Math.random() * 100000)}</p>
-                </div>
-                <table style="width:100%; border-collapse: collapse;">
-                    <tr style="border-bottom: 1px dashed #000;">
-                        <th style="text-align:right">الدواء</th>
-                        <th style="text-align:right">الجرعة</th>
-                        <th style="text-align:right">ملاحظات</th>
-                    </tr>
-                    ${medicines.map(m => `
-                        <tr>
-                            <td style="padding:8px; border-bottom:1px dotted #ccc;"><b>${m.name}</b><br><small>${m.time}</small></td>
-                            <td style="padding:8px; border-bottom:1px dotted #ccc;">${m.freq}</td>
-                            <td style="padding:8px; border-bottom:1px dotted #ccc; color:red;">${m.notes || '-'}</td>
-                        </tr>
-                    `).join('')}
-                </table>
-                <div style="margin-top:20px; text-align:center;">
-                    <p>_________________________</p>
-                    <p>توقيع الطبيب</p>
-                </div>
-            `;
+            // إرسال البيانات للسيرفر
+            await api.addPrescription({
+                clinic_id: clinicSystem.currentClinicId,
+                date: new Date().toISOString(),
+                details: medicines
+            });
 
-            document.getElementById('ticket-content').innerHTML = ticketHtml;
             ui.closeModal('prescription-modal');
-            ui.openModal('ticket-modal');
-            
-            // Save to DB
-            localDB.addPrescription({ clinicId: clinicSystem.currentClinicId, date: new Date(), medicines });
+            ui.showToast('تم حفظ الوصفة في قاعدة البيانات');
         }
     };
 
-    // --- AUTH SYSTEM ---
+    // --- AUTH & ADMIN ---
     const auth = {
-        registerClinic: (e) => {
+        registerClinic: async (e) => {
             e.preventDefault();
-            const name = document.getElementById('reg-name').value;
-            const type = document.getElementById('reg-type').value;
-            const lat = document.getElementById('reg-lat').value;
-            const lng = document.getElementById('reg-lng').value;
+            const clinic = {
+                name: document.getElementById('reg-name').value,
+                type: document.getElementById('reg-type').value,
+                lat: parseFloat(document.getElementById('reg-lat').value),
+                lng: parseFloat(document.getElementById('reg-lng').value),
+                owner: "مالك جديد"
+            };
 
-            if(!lat) { ui.showToast('يرجى تحديد الموقع', 'error'); return; }
-
-            localDB.addClinic({ name, type, lat: parseFloat(lat), lng: parseFloat(lng), owner: "مالك جديد", status: "active", available: true });
+            await api.addClinic(clinic);
             ui.closeModal('register-modal');
             ui.showToast('تم التسجيل بنجاح');
-            mapManager.renderMarkers();
+            mapManager.renderMarkers(); // إعادة تحميل الخريطة
             e.target.reset();
         }
     };
 
-    // --- INIT ---
+    const adminSystem = {
+        renderTable: async () => {
+            const clinics = await api.getClinics(); // جلب البيانات الحقيقية
+            const tbody = document.getElementById('admin-table-body');
+            tbody.innerHTML = clinics.map(c => `
+                <tr>
+                    <td>${c.id}</td>
+                    <td><b>${c.name}</b></td>
+                    <td>${c.type}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="adminSystem.deleteClinic(${c.id})">حذف</button>
+                    </td>
+                </tr>
+            `).join('');
+        },
+
+        deleteClinic: async (id) => {
+            if(confirm('هل أنت متأكد؟')) {
+                await api.deleteClinic(id);
+                adminSystem.renderTable();
+                ui.showToast('تم الحذف من السيرفر', 'error');
+            }
+        }
+    };
+
+    // --- UTILS & ROUTER ---
+    const ui = {
+        openModal: (id) => document.getElementById(id).style.display = 'flex',
+        closeModal: (id) => document.getElementById(id).style.display = 'none',
+        showToast: (msg) => {
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${msg}`;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+    };
+
+    const router = {
+        navigate: (view, params) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            if(view === 'home') mapManager.renderMarkers();
+            if(view === 'clinic' && params) clinicSystem.renderDashboard(params);
+            if(view === 'admin') adminSystem.renderTable();
+        }
+    };
+
     window.addEventListener('DOMContentLoaded', () => {
-        if(!localStorage.getItem(DB_KEY)) localDB.saveData(seedData);
         mapManager.initMap();
         mapManager.renderMarkers();
     });
 </script>
-</body>
-</html>
