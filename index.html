@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediConnect - منصة الحجز الطبي المتكاملة</title>
+    <title>MediConnect - منصة الحجز الطبي (البصرة)</title>
     
     <!-- خط تجوال من جوجل -->
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
@@ -81,6 +81,10 @@
             border-color: var(--primary);
             outline: none;
             box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+        .input-group input:read-only {
+            background-color: #e9ecef;
+            cursor: not-allowed;
         }
 
         /* --- Layout --- */
@@ -367,6 +371,27 @@
         .icon-dentist { background: var(--warning); color: #333; }
         .icon-hospital { background: var(--danger); }
 
+        /* Location Picker Mode */
+        .location-picker-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 50px;
+            z-index: 1000;
+            font-size: 1.2rem;
+            pointer-events: none;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
     </style>
 </head>
 <body>
@@ -375,7 +400,7 @@
     <header>
         <div class="logo">
             <i class="fa-solid fa-staff-snake"></i>
-            MediConnect
+            MediConnect - البصرة
         </div>
         <nav class="nav-links">
             <div class="nav-item active" onclick="router.navigate('home')">الرئيسية</div>
@@ -383,7 +408,7 @@
         </nav>
         <div>
             <button class="btn btn-outline" id="loginBtn" onclick="auth.toggleLogin()">
-                <i class="fa-solid fa-user-doctor"></i> دخول عيادة
+                <i class="fa-solid fa-user-doctor"></i> تسجيل عيادة
             </button>
         </div>
     </header>
@@ -415,6 +440,12 @@
                     </div>
                     <button class="btn btn-primary" style="width:100%" onclick="mapManager.updateFilter()">تحديث النتائج</button>
                 </div>
+                
+                <!-- Message for picking location -->
+                <div id="picker-msg" class="location-picker-msg" style="display:none;">
+                    <i class="fa-solid fa-location-crosshairs"></i> انقر على الخريطة لتحديد موقع عيادتك
+                </div>
+
                 <div id="map"></div>
             </div>
         </section>
@@ -429,7 +460,7 @@
         <section id="view-admin" class="view">
             <div class="panel">
                 <h3><i class="fa-solid fa-shield-halved"></i> لوحة التحكم المركزية (سوبر يوزر)</h3>
-                <p style="margin-bottom:20px; color:#666;">هنا يمكنك رؤية جميع العيادات المسجلة، حذفها، أو تعديل بياناتها.</p>
+                <p style="margin-bottom:20px; color:#666;">هنا يمكنك رؤية جميع العيادات المسجلة في البصرة.</p>
                 <div style="overflow-x:auto;">
                     <table class="admin-table">
                         <thead>
@@ -506,14 +537,19 @@
                     <option value="hospital">مستشفى</option>
                 </select>
             </div>
+            
             <div class="input-group">
-                <label>الموقع (خط العرض - خط الطول)</label>
+                <label>الموقع الجغرافي</label>
+                <button type="button" class="btn btn-outline" style="width:100%; margin-bottom:10px;" onclick="mapManager.startLocationPick()">
+                    <i class="fa-solid fa-map-pin"></i> انقر هنا لاختيار الموقع من الخريطة
+                </button>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="reg-lat" placeholder="Lat" required value="24.7136">
-                    <input type="text" id="reg-lng" placeholder="Lng" required value="46.6753">
+                    <input type="text" id="reg-lat" placeholder="Lat" required readonly value="">
+                    <input type="text" id="reg-lng" placeholder="Lng" required readonly value="">
                 </div>
-                <small style="color:#666">يمكنك النقر على الخريطة لتحديد الموقع لاحقاً</small>
+                <small style="color:#666">لقد تم تحديد الموقع تلقائياً أو اضغط الزر للاختيار</small>
             </div>
+
             <button type="submit" class="btn btn-primary" style="width:100%">إنشاء حساب مجاني</button>
         </form>
     </div>
@@ -545,22 +581,20 @@
 <script>
     /* 
     ================================================================
-       DATA LAYER (Simulating Database for Render Readiness)
-       To connect to PostgreSQL, replace 'localDB' methods with API calls.
+       DATA LAYER (Simulating Database)
     ================================================================
     */
-    const DB_KEY = 'mediconnect_db_v1';
+    const DB_KEY = 'mediconnect_db_v2'; // Updated version key
     
-    // Initial Seed Data
+    // Initial Seed Data for Basra
     const seedData = {
         clinics: [
-            { id: 101, name: "مجمع النخبة الطبي", owner: "د. خالد", type: "hospital", lat: 24.7156, lng: 46.6753, email: "admin@elite.com", status: "active", description: "أفضل مجمع طبي في الرياض", available: true, social: { twitter: "#", instagram: "#" } },
-            { id: 102, name: "عيادة الابتسامة للأسنان", owner: "د. سارة", type: "dentist", lat: 24.7100, lng: 46.6700, email: "sara@smile.com", status: "active", description: "تجميل وتركيب أسنان", available: true, social: {} },
-            { id: 103, name: "صيدلية الشفاء", owner: "أحمد العلي", type: "pharmacy", lat: 24.7200, lng: 46.6800, email: "heal@pharm.com", status: "active", description: "مفتوحة 24 ساعة", available: true, social: {} },
-            { id: 104, name: "عيادة الجلدية الحديثة", owner: "د. منى", type: "dermatology", lat: 24.7050, lng: 46.6850, email: "skin@clinic.com", status: "active", description: "علاج الليزر والتجميل", available: false, social: {} }
+            { id: 101, name: "مجمع البصرة الطبي", owner: "د. علي حسن", type: "hospital", lat: 30.5081, lng: 47.7835, email: "admin@basra.com", status: "active", description: "أفضل مجمع طبي في قلب البصرة", available: true, social: { twitter: "#", instagram: "#" } },
+            { id: 102, name: "عيادة الأسنان الحديثة", owner: "د. سارة", type: "dentist", lat: 30.5120, lng: 47.7900, email: "sara@smile.com", status: "active", description: "تركيب وتجميل أسنان", available: true, social: {} },
+            { id: 103, name: "صيدلية الشعب", owner: "أحمد البصري", type: "pharmacy", lat: 30.5050, lng: 47.7750, email: "heal@pharm.com", status: "active", description: "خدمة توصيل الدواء", available: true, social: {} }
         ],
         appointments: [],
-        currentUser: null // null = guest, or clinic object
+        currentUser: null
     };
 
     const localDB = {
@@ -571,7 +605,6 @@
         saveData: (data) => {
             localStorage.setItem(DB_KEY, JSON.stringify(data));
         },
-        // CRUD Operations
         getClinics: () => localDB.getData().clinics,
         addClinic: (clinic) => {
             const data = localDB.getData();
@@ -605,11 +638,6 @@
         }
     };
 
-    /* 
-    ================================================================
-       UTILITIES & UI
-    ================================================================
-    */
     const ui = {
         showToast: (msg, type = 'success') => {
             const container = document.getElementById('toast-container');
@@ -626,14 +654,11 @@
 
     const router = {
         navigate: (viewName, params = null) => {
-            // Hide all views
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             
-            // Show target
             document.getElementById(`view-${viewName}`).classList.add('active');
             
-            // Logic per view
             if (viewName === 'home') {
                 if (!mapManager.mapInstance) mapManager.initMap();
                 mapManager.renderMarkers();
@@ -645,25 +670,24 @@
         }
     };
 
-    /* 
-    ================================================================
-       MAP MANAGER (Leaflet.js)
-    ================================================================
-    */
     const mapManager = {
         mapInstance: null,
         markers: [],
+        tempMarker: null, // For the pick mode
+        isPicking: false,
         
         initMap: () => {
-            // Default center: Riyadh
-            this.mapInstance = L.map('map').setView([24.7136, 46.6753], 13);
+            // Basra Coordinates
+            this.mapInstance = L.map('map').setView([30.5081, 47.7835], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
             }).addTo(this.mapInstance);
 
-            // Map Click Event (for future use)
+            // Global Click Handler
             this.mapInstance.on('click', (e) => {
-                console.log("Map clicked:", e.latlng);
+                if (mapManager.isPicking) {
+                    mapManager.confirmLocationPick(e.latlng);
+                }
             });
         },
 
@@ -673,24 +697,20 @@
             
             if (type === 'pharmacy') { iconClass = 'fa-prescription-bottle'; colorClass = 'icon-pharmacy'; }
             if (type === 'dentist') { iconClass = 'fa-tooth'; colorClass = 'icon-dentist'; }
-            if (type === 'dermatology') { iconClass = 'fa-hand-sparkles'; colorClass = 'icon-clinic'; }
             
             return `<div class="custom-map-icon ${colorClass}"><i class="fa-solid ${iconClass}"></i></div>`;
         },
 
         renderMarkers: (filter = {}) => {
-            // Clear existing markers
             mapManager.markers.forEach(m => mapManager.mapInstance.removeLayer(m));
             mapManager.markers = [];
 
             const clinics = localDB.getClinics();
             
             clinics.forEach(clinic => {
-                // Apply Filters
                 if (filter.specialty && filter.specialty !== 'all' && clinic.type !== filter.specialty) return;
                 if (filter.available && !clinic.available) return;
 
-                // Create Custom Icon
                 const iconHtml = mapManager.getIconHtml(clinic.type);
                 const customIcon = L.divIcon({
                     html: iconHtml,
@@ -718,14 +738,42 @@
             const available = document.getElementById('filter-available').checked;
             mapManager.renderMarkers({ specialty, available });
             ui.showToast('تم تحديث الخريطة');
+        },
+
+        // New Feature: Location Picking Logic
+        startLocationPick: () => {
+            mapManager.isPicking = true;
+            ui.closeModal('register-modal'); // Close modal to see map
+            document.getElementById('picker-msg').style.display = 'block'; // Show instruction
+            mapManager.mapInstance.getContainer().style.cursor = 'crosshair'; // Change cursor
+        },
+
+        confirmLocationPick: (latlng) => {
+            mapManager.isPicking = false;
+            document.getElementById('picker-msg').style.display = 'none';
+            mapManager.mapInstance.getContainer().style.cursor = ''; // Reset cursor
+
+            // Update Form Fields
+            document.getElementById('reg-lat').value = latlng.lat.toFixed(6);
+            document.getElementById('reg-lng').value = latlng.lng.toFixed(6);
+
+            // Add temporary red marker to show selected spot
+            if (mapManager.tempMarker) mapManager.mapInstance.removeLayer(mapManager.tempMarker);
+            mapManager.tempMarker = L.marker([latlng.lat, latlng.lng], {
+                icon: L.divIcon({
+                    html: '<div style="color:red; font-size:2rem;"><i class="fa-solid fa-location-dot"></i></div>',
+                    className: 'temp-marker',
+                    iconSize: [30,30],
+                    iconAnchor: [15,30]
+                })
+            }).addTo(mapManager.mapInstance);
+
+            // Re-open Modal
+            ui.openModal('register-modal');
+            ui.showToast('تم اختيار الموقع بنجاح');
         }
     };
 
-    /* 
-    ================================================================
-       BOOKING SYSTEM
-    ================================================================
-    */
     const bookingSystem = {
         openBookingModal: (clinicId) => {
             document.getElementById('book-clinic-id').value = clinicId;
@@ -753,30 +801,20 @@
             ui.closeModal('booking-modal');
             ui.showToast('تم حجز الموعد بنجاح!');
             e.target.reset();
-            
-            // Refresh if inside clinic view
             if(document.getElementById('view-clinic').classList.contains('active')) {
                 clinicSystem.renderDashboard(clinicId);
             }
         }
     };
 
-    /* 
-    ================================================================
-       CLINIC SYSTEM (Tenant View)
-    ================================================================
-    */
     const clinicSystem = {
         renderDashboard: (clinicId) => {
             const clinic = localDB.getClinics().find(c => c.id == clinicId);
             if (!clinic) return router.navigate('home');
-
             const appointments = localDB.getAppointmentsForClinic(clinicId);
             const pendingAppts = appointments.filter(a => a.status === 'pending');
-
             const container = document.getElementById('clinic-dynamic-content');
             
-            // Generate HTML
             let html = `
                 <div class="clinic-header" style="background: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);">
                     <img src="https://picsum.photos/seed/${clinic.id}/200/200" class="clinic-avatar" alt="Logo">
@@ -788,34 +826,22 @@
                             <span><i class="fa-solid fa-circle" style="color: ${clinic.available ? 'var(--accent)' : 'var(--danger)'}"></i> ${clinic.available ? 'متاح' : 'مغلق'}</span>
                         </div>
                         <p>${clinic.description || 'مرحباً بكم في عيادتنا.'}</p>
-                        <div style="margin-top:10px;">
-                            ${clinic.social.twitter ? `<a href="#" style="margin-left:10px; color:#1DA1F2"><i class="fa-brands fa-twitter fa-lg"></i></a>` : ''}
-                            ${clinic.social.instagram ? `<a href="#" style="color:#E1306C"><i class="fa-brands fa-instagram fa-lg"></i></a>` : ''}
-                        </div>
                     </div>
                     <div class="clinic-actions">
                         <button class="btn btn-primary" onclick="bookingSystem.openBookingModal(${clinic.id})">
                             <i class="fa-solid fa-calendar-plus"></i> حجز موعد جديد
                         </button>
                         <div class="clinic-stats">
-                            <div class="stat-card">
-                                <strong>${appointments.length}</strong>
-                                <span>إجمالي الحجوزات</span>
-                            </div>
-                            <div class="stat-card">
-                                <strong>${pendingAppts.length}</strong>
-                                <span>قيد الانتظار</span>
-                            </div>
+                            <div class="stat-card"><strong>${appointments.length}</strong><span>إجمالي الحجوزات</span></div>
+                            <div class="stat-card"><strong>${pendingAppts.length}</strong><span>قيد الانتظار</span></div>
                         </div>
                     </div>
                 </div>
 
                 <div class="clinic-grid">
-                    <!-- Column 1: Appointments -->
                     <div class="panel">
-                        <h3>قائمة المواعيد <button class="btn btn-sm" style="font-size:0.8rem" onclick="clinicSystem.renderDashboard(${clinicId})"><i class="fa-solid fa-rotate"></i></button></h3>
+                        <h3>قائمة المواعيد</h3>
                         ${pendingAppts.length === 0 ? '<p style="text-align:center; color:#999; padding:20px;">لا توجد حجوزات جديدة</p>' : ''}
-                        
                         <div class="appointments-list">
                             ${pendingAppts.map(appt => `
                                 <div class="appointment-item">
@@ -832,50 +858,32 @@
                             `).join('')}
                         </div>
                     </div>
-
-                    <!-- Column 2: Info & Pharmacy -->
                     <div>
                         <div class="panel">
                             <h3>تعديل الإعدادات</h3>
-                            <div class="input-group">
-                                <label>حالة العيادة</label>
-                                <button class="btn ${clinic.available ? 'btn-danger' : 'btn-success'}" onclick="clinicSystem.toggleStatus(${clinicId})">
-                                    ${clinic.available ? 'إغلاق العيادة' : 'فتح العيادة'}
-                                </button>
-                            </div>
-                            <div class="input-group">
-                                <label>صورة الخلفية (ترويجي)</label>
-                                <input type="file" style="font-size:0.8rem">
-                            </div>
-                        </div>
-
-                        <div class="panel">
-                            <h3><i class="fa-solid fa-prescription-bottle-medical"></i> الصيدلية الإلكترونية</h3>
-                            <p style="font-size:0.9rem; color:#666; margin-bottom:10px;">إصدار الوصفات الطبية مباشرة للصيدليات المتعاونة.</p>
-                            <button class="btn btn-primary" style="width:100%" onclick="ui.openModal('prescription-modal')">
-                                صرف دواء جديد
+                            <button class="btn ${clinic.available ? 'btn-danger' : 'btn-success'}" onclick="clinicSystem.toggleStatus(${clinicId})">
+                                ${clinic.available ? 'إغلاق العيادة' : 'فتح العيادة'}
                             </button>
+                        </div>
+                        <div class="panel">
+                            <h3>الصيدلية الإلكترونية</h3>
+                            <button class="btn btn-primary" style="width:100%" onclick="ui.openModal('prescription-modal')">صرف دواء جديد</button>
                         </div>
                     </div>
                 </div>
             `;
-            
             container.innerHTML = html;
         },
-
         toggleStatus: (id) => {
             const clinic = localDB.getClinics().find(c => c.id == id);
             if (clinic) {
                 clinic.available = !clinic.available;
-                localDB.saveData(localDB.getData()); // Save manually here
+                localDB.saveData(localDB.getData());
                 clinicSystem.renderDashboard(id);
-                ui.showToast(`تم تغيير الحالة إلى ${clinic.available ? 'متاح' : 'مغلق'}`);
+                ui.showToast(`تم تغيير الحالة`);
             }
         },
-
         completeAppt: (apptId, clinicId) => {
-            // In a real DB, we would update the appointment record.
-            // Here we'll just remove it from the UI for demo simplicity or update status
             const data = localDB.getData();
             const appt = data.appointments.find(a => a.id == apptId);
             if(appt) {
@@ -885,23 +893,14 @@
                 clinicSystem.renderDashboard(clinicId);
             }
         },
-
         addPrescription: () => {
             ui.closeModal('prescription-modal');
             ui.showToast('تم إرسال الوصفة للصيدلية بنجاح', 'success');
         }
     };
 
-    /* 
-    ================================================================
-       AUTH SYSTEM (Registration/Login)
-    ================================================================
-    */
     const auth = {
-        toggleLogin: () => {
-            // Simple toggle for demo
-            ui.openModal('register-modal');
-        },
+        toggleLogin: () => { ui.openModal('register-modal'); },
         registerClinic: (e) => {
             e.preventDefault();
             const name = document.getElementById('reg-name').value;
@@ -912,7 +911,7 @@
 
             const newClinic = {
                 name, email, type, 
-                owner: "المالك الجديد", // In real app, this comes from form
+                owner: "المالك الجديد",
                 lat: parseFloat(lat), 
                 lng: parseFloat(lng),
                 status: 'active',
@@ -924,42 +923,25 @@
             localDB.addClinic(newClinic);
             ui.closeModal('register-modal');
             ui.showToast('تم إنشاء العيادة بنجاح!');
-            
-            // Refresh map
             mapManager.renderMarkers();
             e.target.reset();
+            // Clear temp marker
+            if (mapManager.tempMarker) mapManager.mapInstance.removeLayer(mapManager.tempMarker);
         }
     };
 
-    /* 
-    ================================================================
-       ADMIN SYSTEM (Super User)
-    ================================================================
-    */
     const adminSystem = {
         renderTable: () => {
             const clinics = localDB.getClinics();
             const tbody = document.getElementById('admin-table-body');
-            
-            if(clinics.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">لا توجد بيانات</td></tr>';
-                return;
-            }
-
+            if(clinics.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">لا توجد بيانات</td></tr>'; return; }
             tbody.innerHTML = clinics.map(c => `
                 <tr>
                     <td>${c.id}</td>
-                    <td>
-                        <div style="font-weight:bold">${c.name}</div>
-                        <div style="font-size:0.8rem; color:#777">${c.email}</div>
-                    </td>
+                    <td><div style="font-weight:bold">${c.name}</div><div style="font-size:0.8rem; color:#777">${c.email}</div></td>
                     <td><span class="status-badge" style="background:#eee">${c.type}</span></td>
                     <td>${c.owner}</td>
-                    <td>
-                        <span class="status-badge ${c.status === 'active' ? 'status-active' : 'status-inactive'}">
-                            ${c.status === 'active' ? 'نشط' : 'محظور'}
-                        </span>
-                    </td>
+                    <td><span class="status-badge ${c.status === 'active' ? 'status-active' : 'status-inactive'}">${c.status === 'active' ? 'نشط' : 'محظور'}</span></td>
                     <td>
                         <button class="btn btn-primary" style="padding:5px 10px; font-size:0.8rem;" onclick="router.navigate('clinic', ${c.id})">عرض</button>
                         <button class="btn btn-danger" style="padding:5px 10px; font-size:0.8rem;" onclick="adminSystem.deleteClinic(${c.id})">حذف</button>
@@ -976,23 +958,14 @@
         }
     };
 
-    // Initialize App
     window.addEventListener('DOMContentLoaded', () => {
-        // Load Data
-        if(!localStorage.getItem(DB_KEY)) {
-            localDB.saveData(seedData);
-        }
-
-        // Start Map
+        if(!localStorage.getItem(DB_KEY)) localDB.saveData(seedData);
         mapManager.initMap();
         mapManager.renderMarkers();
-
-        // Listen for range input change
         document.getElementById('filter-distance').addEventListener('input', (e) => {
             document.getElementById('dist-val').innerText = e.target.value;
         });
     });
-
 </script>
 </body>
 </html>
