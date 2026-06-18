@@ -1,581 +1,3 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediConnect - منصة الحجز الطبي (البصرة)</title>
-    
-    <!-- خط تجوال من جوجل -->
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-    <!-- مكتبة أيقونات FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- مكتبة Leaflet للخرائط -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-    <style>
-        :root {
-            --primary: #007bff;
-            --primary-dark: #0056b3;
-            --secondary: #2c3e50;
-            --accent: #28a745;
-            --danger: #dc3545;
-            --warning: #ffc107;
-            --light: #f8f9fa;
-            --dark: #343a40;
-            --glass: rgba(255, 255, 255, 0.95);
-            --shadow: 0 10px 30px rgba(0,0,0,0.1);
-            --radius: 16px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Tajawal', sans-serif;
-        }
-
-        body {
-            background-color: #f0f2f5;
-            color: var(--secondary);
-            overflow-x: hidden;
-            min-height: 100vh;
-        }
-
-        /* --- UI Components --- */
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: var(--radius);
-            cursor: pointer;
-            font-weight: 600;
-            transition: var(--transition);
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.95rem;
-        }
-
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,123,255,0.3); }
-        
-        .btn-success { background: var(--accent); color: white; }
-        .btn-success:hover { background: #218838; transform: translateY(-2px); }
-        
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
-        .btn-outline:hover { background: var(--primary); color: white; }
-
-        .input-group { margin-bottom: 15px; position: relative; }
-        .input-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9rem; }
-        .input-group input, .input-group select, .input-group textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            transition: var(--transition);
-            font-size: 1rem;
-            background: #fff;
-        }
-        .input-group input:focus, .input-group select:focus {
-            border-color: var(--primary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
-        }
-        .input-group input:read-only {
-            background-color: #e9ecef;
-            cursor: not-allowed;
-        }
-
-        /* --- Layout --- */
-        #app {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-
-        /* Header */
-        header {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            padding: 15px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 20px;
-        }
-
-        .nav-item {
-            cursor: pointer;
-            font-weight: 500;
-            color: var(--secondary);
-            transition: var(--transition);
-            position: relative;
-        }
-
-        .nav-item:hover, .nav-item.active {
-            color: var(--primary);
-        }
-
-        .nav-item.active::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: var(--primary);
-            border-radius: 10px;
-        }
-
-        /* Main Content */
-        main {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .view {
-            display: none;
-            height: 100%;
-            overflow-y: auto;
-            padding: 20px;
-            animation: fadeIn 0.4s ease-out;
-        }
-
-        .view.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* --- Dashboard View (Main Map) --- */
-        .dashboard-container {
-            height: calc(100vh - 80px);
-            position: relative;
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-
-        #map {
-            height: 100%;
-            width: 100%;
-            z-index: 1;
-        }
-
-        .filters-panel {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: var(--glass);
-            padding: 20px;
-            border-radius: var(--radius);
-            width: 300px;
-            z-index: 500;
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(10px);
-        }
-
-        /* --- Clinic Profile (Tenant View) --- */
-        .clinic-header {
-            background: white;
-            padding: 30px;
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 30px;
-            flex-wrap: wrap;
-        }
-
-        .clinic-avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 4px solid var(--primary);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        .clinic-info h1 { font-size: 2rem; margin-bottom: 10px; color: var(--secondary); }
-        .clinic-meta { display: flex; gap: 15px; color: #666; font-size: 0.9rem; margin-bottom: 15px; flex-wrap: wrap; }
-        .clinic-meta i { color: var(--primary); margin-left: 5px; }
-
-        .clinic-stats {
-            display: flex;
-            gap: 20px;
-            margin-top: 10px;
-        }
-        .stat-card {
-            background: #f8f9fa;
-            padding: 10px 20px;
-            border-radius: 10px;
-            text-align: center;
-            border: 1px solid #eee;
-        }
-        .stat-card strong { display: block; font-size: 1.2rem; color: var(--primary); }
-
-        .clinic-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 20px;
-        }
-
-        @media (max-width: 900px) {
-            .clinic-grid { grid-template-columns: 1fr; }
-            .filters-panel { width: 90%; left: 5%; right: 5%; top: 10px; }
-            .clinic-header { flex-direction: column; text-align: center; }
-        }
-
-        .panel {
-            background: white;
-            padding: 20px;
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
-        }
-
-        .panel h3 { margin-bottom: 15px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-
-        /* Appointment List */
-        .appointment-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            transition: var(--transition);
-        }
-        .appointment-item:last-child { border-bottom: none; }
-        .appointment-item:hover { background: #f9f9f9; }
-        .patient-info h4 { font-size: 1rem; color: var(--secondary); }
-        .patient-info span { font-size: 0.85rem; color: #777; display: block; }
-        .appointment-actions { display: flex; gap: 8px; }
-
-        /* --- Super Admin View --- */
-        .admin-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-        .admin-table th, .admin-table td {
-            padding: 15px;
-            text-align: right;
-            border-bottom: 1px solid #eee;
-        }
-        .admin-table th { background: var(--primary); color: white; font-weight: 600; }
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        .status-active { background: rgba(40, 167, 69, 0.1); color: var(--accent); }
-        .status-inactive { background: rgba(220, 53, 69, 0.1); color: var(--danger); }
-
-        /* --- Modals --- */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-            backdrop-filter: blur(5px);
-        }
-        .modal {
-            background: white;
-            padding: 30px;
-            border-radius: var(--radius);
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-            animation: scaleUp 0.3s ease-out;
-        }
-        @keyframes scaleUp {
-            from { transform: scale(0.9); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .close-modal { cursor: pointer; font-size: 1.5rem; color: #999; }
-        .close-modal:hover { color: var(--danger); }
-
-        /* --- Toast Notification --- */
-        #toast-container {
-            position: fixed;
-            bottom: 30px;
-            left: 30px;
-            z-index: 3000;
-        }
-        .toast {
-            background: var(--dark);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            margin-top: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: slideInLeft 0.3s ease-out;
-        }
-        .toast.success i { color: var(--accent); }
-        .toast.error i { color: var(--danger); }
-        @keyframes slideInLeft {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        /* Map Custom Icons (Simulated with CSS divs in Leaflet) */
-        .custom-map-icon {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border-radius: 50%;
-            color: white;
-            font-size: 1.2rem;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            border: 2px solid white;
-        }
-        .icon-clinic { background: var(--primary); }
-        .icon-pharmacy { background: var(--accent); }
-        .icon-dentist { background: var(--warning); color: #333; }
-        .icon-hospital { background: var(--danger); }
-
-        /* Location Picker Mode */
-        .location-picker-msg {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 20px 40px;
-            border-radius: 50px;
-            z-index: 1000;
-            font-size: 1.2rem;
-            pointer-events: none;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.1); }
-            100% { transform: translate(-50%, -50%) scale(1); }
-        }
-
-    </style>
-</head>
-<body>
-
-<div id="app">
-    <header>
-        <div class="logo">
-            <i class="fa-solid fa-staff-snake"></i>
-            MediConnect - البصرة
-        </div>
-        <nav class="nav-links">
-            <div class="nav-item active" onclick="router.navigate('home')">الرئيسية</div>
-            <div class="nav-item" onclick="router.navigate('admin')">لوحة الإدارة (سوبر)</div>
-        </nav>
-        <div>
-            <button class="btn btn-outline" id="loginBtn" onclick="auth.toggleLogin()">
-                <i class="fa-solid fa-user-doctor"></i> تسجيل عيادة
-            </button>
-        </div>
-    </header>
-
-    <main>
-        <!-- 1. Main Map View -->
-        <section id="view-home" class="view active">
-            <div class="dashboard-container">
-                <div class="filters-panel">
-                    <h3><i class="fa-solid fa-filter"></i> البحث والتصفية</h3>
-                    <div class="input-group">
-                        <label>الاختصاص</label>
-                        <select id="filter-specialty">
-                            <option value="all">الكل</option>
-                            <option value="general">طب عام</option>
-                            <option value="dentist">أسنان</option>
-                            <option value="pharmacy">صيدلية</option>
-                            <option value="dermatology">جلدية</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>المسافة (كم)</label>
-                        <input type="range" min="1" max="50" value="10" id="filter-distance">
-                        <div style="text-align:left; font-size:0.8rem; color:#666;">حتى <span id="dist-val">10</span> كم</div>
-                    </div>
-                    <div class="input-group">
-                        <label><i class="fa-solid fa-check-circle"></i> المتاح الآن فقط</label>
-                        <input type="checkbox" id="filter-available" style="width:auto;">
-                    </div>
-                    <button class="btn btn-primary" style="width:100%" onclick="mapManager.updateFilter()">تحديث النتائج</button>
-                </div>
-                
-                <!-- Message for picking location -->
-                <div id="picker-msg" class="location-picker-msg" style="display:none;">
-                    <i class="fa-solid fa-location-crosshairs"></i> انقر على الخريطة لتحديد موقع عيادتك
-                </div>
-
-                <div id="map"></div>
-            </div>
-        </section>
-
-        <!-- 2. Clinic Dashboard View (Tenant) -->
-        <section id="view-clinic" class="view">
-            <!-- Dynamic Content Injected Here -->
-            <div id="clinic-dynamic-content"></div>
-        </section>
-
-        <!-- 3. Super Admin View -->
-        <section id="view-admin" class="view">
-            <div class="panel">
-                <h3><i class="fa-solid fa-shield-halved"></i> لوحة التحكم المركزية (سوبر يوزر)</h3>
-                <p style="margin-bottom:20px; color:#666;">هنا يمكنك رؤية جميع العيادات المسجلة في البصرة.</p>
-                <div style="overflow-x:auto;">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>اسم العيادة</th>
-                                <th>النوع</th>
-                                <th>المالك</th>
-                                <th>الحالة</th>
-                                <th>إجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-table-body">
-                            <!-- Rows injected via JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-    </main>
-</div>
-
-<!-- Modals -->
-<div class="modal-overlay" id="booking-modal">
-    <div class="modal">
-        <div class="modal-header">
-            <h3>حجز موعد جديد</h3>
-            <i class="fa-solid fa-times close-modal" onclick="ui.closeModal('booking-modal')"></i>
-        </div>
-        <form id="booking-form" onsubmit="bookingSystem.createBooking(event)">
-            <input type="hidden" id="book-clinic-id">
-            <div class="input-group">
-                <label>الاسم الكامل</label>
-                <input type="text" id="book-name" required placeholder="مثال: أحمد محمد">
-            </div>
-            <div class="input-group">
-                <label>العمر</label>
-                <input type="number" id="book-age" required placeholder="30">
-            </div>
-            <div class="input-group">
-                <label>التاريخ الطبي (اختياري)</label>
-                <textarea id="book-history" rows="3" placeholder="هل تعاني من أمراض مزمنة؟ حساسية؟"></textarea>
-            </div>
-            <div class="input-group">
-                <label>الموعد المفضل</label>
-                <input type="datetime-local" id="book-time" required>
-            </div>
-            <button type="submit" class="btn btn-success" style="width:100%">تأكيد الحجز</button>
-        </form>
-    </div>
-</div>
-
-<div class="modal-overlay" id="register-modal">
-    <div class="modal">
-        <div class="modal-header">
-            <h3>تسجيل عيادة جديدة</h3>
-            <i class="fa-solid fa-times close-modal" onclick="ui.closeModal('register-modal')"></i>
-        </div>
-        <form id="register-form" onsubmit="auth.registerClinic(event)">
-            <div class="input-group">
-                <label>اسم العيادة / الطبيب</label>
-                <input type="text" id="reg-name" required>
-            </div>
-            <div class="input-group">
-                <label>البريد الإلكتروني (ID للدخول)</label>
-                <input type="email" id="reg-email" required>
-            </div>
-            <div class="input-group">
-                <label>نوع المنشأة</label>
-                <select id="reg-type" required>
-                    <option value="general">عيادة عامة</option>
-                    <option value="dentist">عيادة أسنان</option>
-                    <option value="pharmacy">صيدلية</option>
-                    <option value="hospital">مستشفى</option>
-                </select>
-            </div>
-            
-            <div class="input-group">
-                <label>الموقع الجغرافي</label>
-                <button type="button" class="btn btn-outline" style="width:100%; margin-bottom:10px;" onclick="mapManager.startLocationPick()">
-                    <i class="fa-solid fa-map-pin"></i> انقر هنا لاختيار الموقع من الخريطة
-                </button>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="reg-lat" placeholder="Lat" required readonly value="">
-                    <input type="text" id="reg-lng" placeholder="Lng" required readonly value="">
-                </div>
-                <small style="color:#666">لقد تم تحديد الموقع تلقائياً أو اضغط الزر للاختيار</small>
-            </div>
-
-            <button type="submit" class="btn btn-primary" style="width:100%">إنشاء حساب مجاني</button>
-        </form>
-    </div>
-</div>
-
-<div class="modal-overlay" id="prescription-modal">
-    <div class="modal">
-        <div class="modal-header">
-            <h3>صرف دواء إلكتروني</h3>
-            <i class="fa-solid fa-times close-modal" onclick="ui.closeModal('prescription-modal')"></i>
-        </div>
-        <div class="input-group">
-            <label>اسم الدواء</label>
-            <input type="text" id="rx-name" placeholder="اسم العلمي والتجاري">
-        </div>
-        <div class="input-group">
-            <label>الجرعة</label>
-            <input type="text" id="rx-dosage" placeholder="مثال: 1 قرص بعد الأكل">
-        </div>
-        <button class="btn btn-success" onclick="clinicSystem.addPrescription()">إرسال للصيدلية</button>
-    </div>
-</div>
-
-<!-- Toast Container -->
-<div id="toast-container"></div>
-
 <!-- Scripts -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -584,9 +6,8 @@
        DATA LAYER (Simulating Database)
     ================================================================
     */
-    const DB_KEY = 'mediconnect_db_v2'; // Updated version key
+    const DB_KEY = 'mediconnect_db_v3'; 
     
-    // Initial Seed Data for Basra
     const seedData = {
         clinics: [
             { id: 101, name: "مجمع البصرة الطبي", owner: "د. علي حسن", type: "hospital", lat: 30.5081, lng: 47.7835, email: "admin@basra.com", status: "active", description: "أفضل مجمع طبي في قلب البصرة", available: true, social: { twitter: "#", instagram: "#" } },
@@ -627,14 +48,6 @@
         getAppointmentsForClinic: (clinicId) => {
             const data = localDB.getData();
             return data.appointments.filter(a => a.clinicId == clinicId);
-        },
-        updateClinicStatus: (id, status) => {
-            const data = localDB.getData();
-            const clinic = data.clinics.find(c => c.id == id);
-            if(clinic) {
-                clinic.status = status;
-                localDB.saveData(data);
-            }
         }
     };
 
@@ -648,15 +61,20 @@
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         },
-        openModal: (id) => document.getElementById(id).style.display = 'flex',
-        closeModal: (id) => document.getElementById(id).style.display = 'none'
+        openModal: (id) => {
+            const modal = document.getElementById(id);
+            if(modal) modal.style.display = 'flex';
+        },
+        closeModal: (id) => {
+            const modal = document.getElementById(id);
+            if(modal) modal.style.display = 'none';
+        }
     };
 
     const router = {
         navigate: (viewName, params = null) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            
             document.getElementById(`view-${viewName}`).classList.add('active');
             
             if (viewName === 'home') {
@@ -670,21 +88,22 @@
         }
     };
 
+    // متغير لتخزين الإحداثيات مؤقتاً بشكل آمن
+    window.tempPickedCoords = null;
+
     const mapManager = {
         mapInstance: null,
         markers: [],
-        tempMarker: null, // For the pick mode
+        tempMarker: null,
         isPicking: false,
         
         initMap: () => {
-            // Basra Coordinates
-            this.mapInstance = L.map('map').setView([30.5081, 47.7835], 13);
+            mapManager.mapInstance = L.map('map').setView([30.5081, 47.7835], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
-            }).addTo(this.mapInstance);
+            }).addTo(mapManager.mapInstance);
 
-            // Global Click Handler
-            this.mapInstance.on('click', (e) => {
+            mapManager.mapInstance.on('click', (e) => {
                 if (mapManager.isPicking) {
                     mapManager.confirmLocationPick(e.latlng);
                 }
@@ -694,17 +113,14 @@
         getIconHtml: (type) => {
             let iconClass = 'fa-hospital';
             let colorClass = 'icon-hospital';
-            
             if (type === 'pharmacy') { iconClass = 'fa-prescription-bottle'; colorClass = 'icon-pharmacy'; }
             if (type === 'dentist') { iconClass = 'fa-tooth'; colorClass = 'icon-dentist'; }
-            
             return `<div class="custom-map-icon ${colorClass}"><i class="fa-solid ${iconClass}"></i></div>`;
         },
 
         renderMarkers: (filter = {}) => {
             mapManager.markers.forEach(m => mapManager.mapInstance.removeLayer(m));
             mapManager.markers = [];
-
             const clinics = localDB.getClinics();
             
             clinics.forEach(clinic => {
@@ -724,11 +140,9 @@
                     .bindPopup(`
                         <div style="text-align:right; font-family:'Tajawal'">
                             <h4 style="margin-bottom:5px">${clinic.name}</h4>
-                            <p style="font-size:0.8rem; color:#666">${clinic.description || 'لا يوجد وصف'}</p>
                             <button onclick="router.navigate('clinic', ${clinic.id})" style="margin-top:5px; background:var(--primary); color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer">الدخول للعيادة</button>
                         </div>
                     `);
-                
                 mapManager.markers.push(marker);
             });
         },
@@ -740,37 +154,76 @@
             ui.showToast('تم تحديث الخريطة');
         },
 
-        // New Feature: Location Picking Logic
         startLocationPick: () => {
             mapManager.isPicking = true;
-            ui.closeModal('register-modal'); // Close modal to see map
-            document.getElementById('picker-msg').style.display = 'block'; // Show instruction
-            mapManager.mapInstance.getContainer().style.cursor = 'crosshair'; // Change cursor
+            // إغلاق جميع المودالز
+            document.querySelectorAll('.modal-overlay').forEach(el => el.style.display = 'none');
+            
+            document.getElementById('picker-msg').style.display = 'block';
+            mapManager.mapInstance.getContainer().style.cursor = 'crosshair';
+            
+            // إزالة العلامة السابقة إذا وجدت
+            if (mapManager.tempMarker) {
+                mapManager.mapInstance.removeLayer(mapManager.tempMarker);
+                mapManager.tempMarker = null;
+            }
         },
 
         confirmLocationPick: (latlng) => {
+            // 1. إعادة ضبط الحالة
             mapManager.isPicking = false;
             document.getElementById('picker-msg').style.display = 'none';
-            mapManager.mapInstance.getContainer().style.cursor = ''; // Reset cursor
+            mapManager.mapInstance.getContainer().style.cursor = '';
 
-            // Update Form Fields
-            document.getElementById('reg-lat').value = latlng.lat.toFixed(6);
-            document.getElementById('reg-lng').value = latlng.lng.toFixed(6);
+            if (!latlng || !latlng.lat || !latlng.lng) {
+                ui.showToast('لم يتم تحديد الموقع بشكل صحيح', 'error');
+                return;
+            }
 
-            // Add temporary red marker to show selected spot
+            // 2. حفظ الإحداثيات في المتغير العام (نسخة احتياطية)
+            window.tempPickedCoords = {
+                lat: latlng.lat.toFixed(6),
+                lng: latlng.lng.toFixed(6)
+            };
+
+            // 3. إضافة العلامة الحمراء
             if (mapManager.tempMarker) mapManager.mapInstance.removeLayer(mapManager.tempMarker);
+            
             mapManager.tempMarker = L.marker([latlng.lat, latlng.lng], {
                 icon: L.divIcon({
-                    html: '<div style="color:red; font-size:2rem;"><i class="fa-solid fa-location-dot"></i></div>',
+                    html: '<div style="color:red; font-size:2rem; text-shadow: 0 0 5px white;"><i class="fa-solid fa-location-dot"></i></div>',
                     className: 'temp-marker',
                     iconSize: [30,30],
                     iconAnchor: [15,30]
                 })
-            }).addTo(mapManager.mapInstance);
+            }).addTo(mapManager.mapInstance)
+              .bindPopup("تم تحديد الموقع هنا").openPopup();
 
-            // Re-open Modal
+            // 4. فتح النافذة
             ui.openModal('register-modal');
-            ui.showToast('تم اختيار الموقع بنجاح');
+
+            // 5. مهم جداً: استخدام setTimeout لكتابة الإحداثيات بعد فتح النافذة مباشرة
+            // هذا يضمن أن الحقول موجودة ومرئية قبل محاولة الكتابة فيها
+            setTimeout(() => {
+                const latInput = document.getElementById('reg-lat');
+                const lngInput = document.getElementById('reg-lng');
+
+                if (latInput && lngInput) {
+                    latInput.value = window.tempPickedCoords.lat;
+                    lngInput.value = window.tempPickedCoords.lng;
+                    
+                    // تغيير لون الحدود للإشارة للنجاح
+                    latInput.style.borderColor = '#28a745';
+                    lngInput.style.borderColor = '#28a745';
+                    
+                    console.log('Coordinates filled:', window.tempPickedCoords); // للتأكد في الكونسول
+                } else {
+                    console.error('Could not find input fields');
+                    ui.showToast('حدث خطأ في العثور على الحقول', 'error');
+                }
+            }, 100); // تأخير 100 ميلي ثانية فقط
+            
+            ui.showToast('تم اختيار الموقع');
         }
     };
 
@@ -782,21 +235,15 @@
         createBooking: (e) => {
             e.preventDefault();
             const clinicId = document.getElementById('book-clinic-id').value;
-            const name = document.getElementById('book-name').value;
-            const age = document.getElementById('book-age').value;
-            const history = document.getElementById('book-history').value;
-            const time = document.getElementById('book-time').value;
-
             const newBooking = {
                 clinicId,
-                patientName: name,
-                patientAge: age,
-                medicalHistory: history,
-                time,
+                patientName: document.getElementById('book-name').value,
+                patientAge: document.getElementById('book-age').value,
+                medicalHistory: document.getElementById('book-history').value,
+                time: document.getElementById('book-time').value,
                 status: 'pending',
                 createdAt: new Date().toISOString()
             };
-
             localDB.addAppointment(newBooking);
             ui.closeModal('booking-modal');
             ui.showToast('تم حجز الموعد بنجاح!');
@@ -813,75 +260,34 @@
             if (!clinic) return router.navigate('home');
             const appointments = localDB.getAppointmentsForClinic(clinicId);
             const pendingAppts = appointments.filter(a => a.status === 'pending');
-            const container = document.getElementById('clinic-dynamic-content');
             
-            let html = `
-                <div class="clinic-header" style="background: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);">
+            const container = document.getElementById('clinic-dynamic-content');
+            container.innerHTML = `
+                <div class="clinic-header">
                     <img src="https://picsum.photos/seed/${clinic.id}/200/200" class="clinic-avatar" alt="Logo">
                     <div class="clinic-info" style="flex:1">
                         <h1>${clinic.name}</h1>
                         <div class="clinic-meta">
                             <span><i class="fa-solid fa-user-md"></i> ${clinic.owner}</span>
-                            <span><i class="fa-solid fa-briefcase-medical"></i> ${clinic.type}</span>
                             <span><i class="fa-solid fa-circle" style="color: ${clinic.available ? 'var(--accent)' : 'var(--danger)'}"></i> ${clinic.available ? 'متاح' : 'مغلق'}</span>
                         </div>
-                        <p>${clinic.description || 'مرحباً بكم في عيادتنا.'}</p>
                     </div>
-                    <div class="clinic-actions">
-                        <button class="btn btn-primary" onclick="bookingSystem.openBookingModal(${clinic.id})">
-                            <i class="fa-solid fa-calendar-plus"></i> حجز موعد جديد
-                        </button>
-                        <div class="clinic-stats">
-                            <div class="stat-card"><strong>${appointments.length}</strong><span>إجمالي الحجوزات</span></div>
-                            <div class="stat-card"><strong>${pendingAppts.length}</strong><span>قيد الانتظار</span></div>
-                        </div>
-                    </div>
+                    <button class="btn btn-primary" onclick="bookingSystem.openBookingModal(${clinic.id})">حجز موعد جديد</button>
                 </div>
-
-                <div class="clinic-grid">
-                    <div class="panel">
-                        <h3>قائمة المواعيد</h3>
-                        ${pendingAppts.length === 0 ? '<p style="text-align:center; color:#999; padding:20px;">لا توجد حجوزات جديدة</p>' : ''}
-                        <div class="appointments-list">
-                            ${pendingAppts.map(appt => `
-                                <div class="appointment-item">
-                                    <div class="patient-info">
-                                        <h4>${appt.patientName} <span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8rem">${appt.patientAge} سنة</span></h4>
-                                        <span><i class="fa-regular fa-clock"></i> ${new Date(appt.time).toLocaleString('ar-SA')}</span>
-                                        ${appt.medicalHistory ? `<span style="color:var(--danger); margin-top:5px;"><i class="fa-solid fa-notes-medical"></i> ${appt.medicalHistory}</span>` : ''}
-                                    </div>
-                                    <div class="appointment-actions">
-                                        <button class="btn btn-success" onclick="clinicSystem.completeAppt(${appt.id}, ${clinicId})" title="إتمام"><i class="fa-solid fa-check"></i></button>
-                                        <button class="btn btn-outline" onclick="ui.openModal('prescription-modal')" title="وصفة"><i class="fa-solid fa-file-prescription"></i></button>
-                                    </div>
-                                </div>
-                            `).join('')}
+                <div class="panel">
+                    <h3>المواعيد</h3>
+                    ${pendingAppts.length === 0 ? '<p>لا توجد حجوزات جديدة</p>' : 
+                    pendingAppts.map(appt => `
+                        <div class="appointment-item">
+                            <div class="patient-info">
+                                <h4>${appt.patientName} <small>(${appt.patientAge} سنة)</small></h4>
+                                <small>${new Date(appt.time).toLocaleString('ar-SA')}</small>
+                            </div>
+                            <button class="btn btn-success" onclick="clinicSystem.completeAppt(${appt.id}, ${clinicId})">إتمام</button>
                         </div>
-                    </div>
-                    <div>
-                        <div class="panel">
-                            <h3>تعديل الإعدادات</h3>
-                            <button class="btn ${clinic.available ? 'btn-danger' : 'btn-success'}" onclick="clinicSystem.toggleStatus(${clinicId})">
-                                ${clinic.available ? 'إغلاق العيادة' : 'فتح العيادة'}
-                            </button>
-                        </div>
-                        <div class="panel">
-                            <h3>الصيدلية الإلكترونية</h3>
-                            <button class="btn btn-primary" style="width:100%" onclick="ui.openModal('prescription-modal')">صرف دواء جديد</button>
-                        </div>
-                    </div>
+                    `).join('')}
                 </div>
             `;
-            container.innerHTML = html;
-        },
-        toggleStatus: (id) => {
-            const clinic = localDB.getClinics().find(c => c.id == id);
-            if (clinic) {
-                clinic.available = !clinic.available;
-                localDB.saveData(localDB.getData());
-                clinicSystem.renderDashboard(id);
-                ui.showToast(`تم تغيير الحالة`);
-            }
         },
         completeAppt: (apptId, clinicId) => {
             const data = localDB.getData();
@@ -889,13 +295,9 @@
             if(appt) {
                 appt.status = 'completed';
                 localDB.saveData(data);
-                ui.showToast('تم إتمام الكشف بنجاح');
+                ui.showToast('تم إتمام الكشف');
                 clinicSystem.renderDashboard(clinicId);
             }
-        },
-        addPrescription: () => {
-            ui.closeModal('prescription-modal');
-            ui.showToast('تم إرسال الوصفة للصيدلية بنجاح', 'success');
         }
     };
 
@@ -903,30 +305,34 @@
         toggleLogin: () => { ui.openModal('register-modal'); },
         registerClinic: (e) => {
             e.preventDefault();
-            const name = document.getElementById('reg-name').value;
-            const email = document.getElementById('reg-email').value;
-            const type = document.getElementById('reg-type').value;
             const lat = document.getElementById('reg-lat').value;
             const lng = document.getElementById('reg-lng').value;
 
+            if(!lat || !lng) {
+                ui.showToast('الرجاء اختيار الموقع من الخريطة أولاً', 'error');
+                return;
+            }
+
             const newClinic = {
-                name, email, type, 
-                owner: "المالك الجديد",
+                name: document.getElementById('reg-name').value,
+                email: document.getElementById('reg-email').value,
+                type: document.getElementById('reg-type').value,
+                owner: "المالك",
                 lat: parseFloat(lat), 
                 lng: parseFloat(lng),
                 status: 'active',
                 available: true,
-                description: 'وصف تلقائي للعيادة الجديدة',
+                description: 'عيادة جديدة',
                 social: {}
             };
 
             localDB.addClinic(newClinic);
             ui.closeModal('register-modal');
             ui.showToast('تم إنشاء العيادة بنجاح!');
-            mapManager.renderMarkers();
+            
             e.target.reset();
-            // Clear temp marker
             if (mapManager.tempMarker) mapManager.mapInstance.removeLayer(mapManager.tempMarker);
+            mapManager.renderMarkers();
         }
     };
 
@@ -934,26 +340,20 @@
         renderTable: () => {
             const clinics = localDB.getClinics();
             const tbody = document.getElementById('admin-table-body');
-            if(clinics.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">لا توجد بيانات</td></tr>'; return; }
             tbody.innerHTML = clinics.map(c => `
                 <tr>
                     <td>${c.id}</td>
-                    <td><div style="font-weight:bold">${c.name}</div><div style="font-size:0.8rem; color:#777">${c.email}</div></td>
-                    <td><span class="status-badge" style="background:#eee">${c.type}</span></td>
-                    <td>${c.owner}</td>
-                    <td><span class="status-badge ${c.status === 'active' ? 'status-active' : 'status-inactive'}">${c.status === 'active' ? 'نشط' : 'محظور'}</span></td>
-                    <td>
-                        <button class="btn btn-primary" style="padding:5px 10px; font-size:0.8rem;" onclick="router.navigate('clinic', ${c.id})">عرض</button>
-                        <button class="btn btn-danger" style="padding:5px 10px; font-size:0.8rem;" onclick="adminSystem.deleteClinic(${c.id})">حذف</button>
-                    </td>
+                    <td>${c.name}</td>
+                    <td>${c.type}</td>
+                    <td><button class="btn btn-danger" onclick="adminSystem.deleteClinic(${c.id})">حذف</button></td>
                 </tr>
             `).join('');
         },
         deleteClinic: (id) => {
-            if(confirm('هل أنت متأكد من حذف هذه العيادة نهائياً؟')) {
+            if(confirm('حذف؟')) {
                 localDB.deleteClinic(id);
                 adminSystem.renderTable();
-                ui.showToast('تم الحذف بنجاح', 'error');
+                mapManager.renderMarkers();
             }
         }
     };
@@ -962,10 +362,5 @@
         if(!localStorage.getItem(DB_KEY)) localDB.saveData(seedData);
         mapManager.initMap();
         mapManager.renderMarkers();
-        document.getElementById('filter-distance').addEventListener('input', (e) => {
-            document.getElementById('dist-val').innerText = e.target.value;
-        });
     });
 </script>
-</body>
-</html>
