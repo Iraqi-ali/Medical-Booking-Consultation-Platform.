@@ -1,32 +1,209 @@
-<!-- Scripts -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediConnect - منصة الحجز الطبي (البصرة)</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        :root {
+            --primary: #007bff; --primary-dark: #0056b3;
+            --secondary: #2c3e50; --accent: #28a745;
+            --danger: #dc3545; --warning: #ffc107;
+            --light: #f8f9fa; --dark: #343a40;
+            --glass: rgba(255, 255, 255, 0.95);
+            --shadow: 0 10px 30px rgba(0,0,0,0.1);
+            --radius: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; }
+        body { background-color: #f0f2f5; color: var(--secondary); overflow-x: hidden; min-height: 100vh; }
+
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--accent); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
+        .input-group input, .input-group select, .input-group textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.95rem; }
+
+        #app { display: flex; flex-direction: column; height: 100vh; }
+        header { background: var(--glass); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .logo { font-size: 1.4rem; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        
+        main { flex: 1; position: relative; overflow: hidden; }
+        .view { display: none; height: 100%; overflow-y: auto; padding: 20px; animation: fadeIn 0.4s; }
+        .view.active { display: block; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .dashboard-container { height: calc(100vh - 70px); position: relative; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+        #map { height: 100%; width: 100%; z-index: 1; }
+        .filters-panel { position: absolute; top: 20px; right: 20px; background: var(--glass); padding: 20px; border-radius: var(--radius); width: 280px; z-index: 500; box-shadow: var(--shadow); backdrop-filter: blur(10px); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal { background: white; padding: 30px; border-radius: var(--radius); width: 95%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.2); }
+        
+        .med-item-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px; position: relative; }
+        .med-item-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        
+        .toast { position: fixed; bottom: 20px; left: 20px; background: var(--dark); color: white; padding: 12px 20px; border-radius: 8px; z-index: 3000; display: flex; gap: 10px; align-items: center; }
+        .location-picker-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 50px; z-index: 1000; pointer-events: none; }
+
+        .appointment-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <div class="logo"><i class="fa-solid fa-staff-snake"></i> MediConnect - البصرة</div>
+        <nav style="display:flex; gap:20px;">
+            <button class="btn btn-outline" onclick="router.navigate('home')">الرئيسية</button>
+            <button class="btn btn-outline" onclick="router.navigate('admin')">الإدارة</button>
+        </nav>
+        <button class="btn btn-primary" onclick="ui.openModal('register-modal')"><i class="fa-solid fa-plus"></i> تسجيل عيادة</button>
+    </header>
+
+    <main>
+        <!-- Home / Map -->
+        <section id="view-home" class="view active">
+            <div class="dashboard-container">
+                <div class="filters-panel">
+                    <h4><i class="fa-solid fa-filter"></i> البحث</h4>
+                    <div class="input-group">
+                        <select id="filter-specialty">
+                            <option value="all">الكل</option>
+                            <option value="hospital">مستشفيات</option>
+                            <option value="clinic">عيادات</option>
+                            <option value="pharmacy">صيدليات</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>مزامنة البيانات</label>
+                        <button class="btn btn-success" style="width:100%" onclick="mapManager.renderMarkers()">
+                            <i class="fa-solid fa-sync"></i> تحديث
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="picker-msg" class="location-picker-msg" style="display:none;">انقر على الخريطة لتحديد الموقع</div>
+                <div id="map"></div>
+            </div>
+        </section>
+
+        <!-- Clinic Dashboard -->
+        <section id="view-clinic" class="view">
+            <div id="clinic-dynamic-content"></div>
+        </section>
+    </main>
+</div>
+
+<!-- Modals -->
+<!-- Register Modal -->
+<div class="modal-overlay" id="register-modal">
+    <div class="modal">
+        <h3>تسجيل عيادة جديدة</h3>
+        <form onsubmit="auth.registerClinic(event)">
+            <div class="input-group">
+                <label>اسم العيادة</label>
+                <input type="text" id="reg-name" required>
+            </div>
+            <div class="input-group">
+                <label>النوع</label>
+                <select id="reg-type">
+                    <option value="hospital">مستشفى</option>
+                    <option value="clinic">عيادة</option>
+                    <option value="pharmacy">صيدلية</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>الموقع</label>
+                <button type="button" class="btn btn-outline" style="width:100%; margin-bottom:10px;" onclick="mapManager.startLocationPick()">اختر من الخريطة</button>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="reg-lat" placeholder="Lat" readonly>
+                    <input type="text" id="reg-lng" placeholder="Lng" readonly>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%">تسجيل</button>
+            <button type="button" class="btn btn-danger" style="width:100%; margin-top:10px;" onclick="ui.closeModal('register-modal')">إلغاء</button>
+        </form>
+    </div>
+</div>
+
+<!-- Prescription Modal -->
+<div class="modal-overlay" id="prescription-modal">
+    <div class="modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3><i class="fa-solid fa-file-prescription"></i> إصدار وصفة طبية</h3>
+            <i class="fa-solid fa-times" style="cursor:pointer; font-size:1.5rem" onclick="ui.closeModal('prescription-modal')"></i>
+        </div>
+        <div id="medicines-list"></div>
+        <button class="btn btn-outline" style="width:100%; margin-bottom:20px;" onclick="clinicSystem.addMedicineRow()">+ إضافة دواء آخر</button>
+        <button class="btn btn-success" style="width:100%" onclick="clinicSystem.finalizePrescription()">إصدار الوصفة</button>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // --- API OBJECT (يتحدث مع السيرفر) ---
+    // --- API OBJECT ---
     const api = {
         getClinics: async () => {
-            const res = await fetch('/api/clinics');
-            const data = await res.json();
-            return data.data;
+            try {
+                const res = await fetch('/api/clinics');
+                if (!res.ok) throw new Error('Server error');
+                const data = await res.json();
+                return data.data || [];
+            } catch (e) {
+                console.error("API Error:", e);
+                ui.showToast('خطأ في الاتصال بالسيرفر', 'error');
+                return [];
+            }
         },
         addClinic: async (clinic) => {
-            const res = await fetch('/api/clinics', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(clinic)
-            });
-            return await res.json();
+            try {
+                const res = await fetch('/api/clinics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(clinic)
+                });
+                return await res.json();
+            } catch (e) {
+                ui.showToast('خطأ في الإرسال', 'error');
+                return { success: false };
+            }
         },
         deleteClinic: async (id) => {
-            const res = await fetch(`/api/clinics/${id}`, { method: 'DELETE' });
-            return await res.json();
+            try {
+                const res = await fetch(`/api/clinics/${id}`, { method: 'DELETE' });
+                return await res.json();
+            } catch (e) {
+                ui.showToast('خطأ في الحذف', 'error');
+                return { success: false };
+            }
         },
         addPrescription: async (rx) => {
-            const res = await fetch('/api/prescriptions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(rx)
-            });
-            return await res.json();
+            try {
+                const res = await fetch('/api/prescriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(rx)
+                });
+                return await res.json();
+            } catch (e) {
+                ui.showToast('خطأ في حفظ الوصفة', 'error');
+                return { success: false };
+            }
         }
     };
 
@@ -35,34 +212,32 @@
         mapInstance: null,
         markers: [],
         isPicking: false,
-        clinicsData: [], // تخزين البيانات محلياً مؤقتاً للعرض السريع
+        clinicsData: [],
         
         initMap: () => {
-            mapManager.mapInstance = L.map('map').setView([30.5081, 47.7835], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapManager.mapInstance);
-            
-            mapManager.mapInstance.on('click', (e) => {
-                if(mapManager.isPicking) mapManager.confirmLocationPick(e.latlng);
-            });
+            try {
+                mapManager.mapInstance = L.map('map').setView([30.5081, 47.7835], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapManager.mapInstance);
+                mapManager.mapInstance.on('click', (e) => {
+                    if(mapManager.isPicking) mapManager.confirmLocationPick(e.latlng);
+                });
+            } catch (e) {
+                console.error("Map Init Error:", e);
+            }
         },
 
         renderMarkers: async () => {
-            // جلب البيانات الحقيقية من السيرفر
             mapManager.clinicsData = await api.getClinics();
-            
-            // مسح العلامات القديمة
             mapManager.markers.forEach(m => mapManager.mapInstance.removeLayer(m));
             mapManager.markers = [];
 
-            // رسم العلامات الجديدة
             mapManager.clinicsData.forEach(c => {
                 const typeIcons = { hospital: 'fa-hospital', clinic: 'fa-stethoscope', pharmacy: 'fa-prescription-bottle' };
                 const color = c.type === 'pharmacy' ? 'var(--accent)' : 'var(--primary)';
                 
                 const icon = L.divIcon({
                     html: `<div style="background:${color}; color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 3px 5px rgba(0,0,0,0.3)"><i class="fa-solid ${typeIcons[c.type]}"></i></div>`,
-                    className: 'custom-icon',
-                    iconSize: [30,30], iconAnchor: [15,30]
+                    className: 'custom-icon', iconSize: [30,30], iconAnchor: [15,30]
                 });
 
                 const marker = L.marker([c.lat, c.lng], {icon})
@@ -75,14 +250,16 @@
         startLocationPick: () => {
             mapManager.isPicking = true;
             ui.closeModal('register-modal');
-            document.getElementById('picker-msg').style.display = 'block';
-            mapManager.mapInstance.getContainer().style.cursor = 'crosshair';
+            const msg = document.getElementById('picker-msg');
+            if(msg) msg.style.display = 'block';
+            if(mapManager.mapInstance) mapManager.mapInstance.getContainer().style.cursor = 'crosshair';
         },
 
         confirmLocationPick: (latlng) => {
             mapManager.isPicking = false;
-            document.getElementById('picker-msg').style.display = 'none';
-            mapManager.mapInstance.getContainer().style.cursor = '';
+            const msg = document.getElementById('picker-msg');
+            if(msg) msg.style.display = 'none';
+            if(mapManager.mapInstance) mapManager.mapInstance.getContainer().style.cursor = '';
             
             window.tempPickedCoords = { lat: latlng.lat.toFixed(6), lng: latlng.lng.toFixed(6) };
             ui.openModal('register-modal');
@@ -100,14 +277,13 @@
 
         renderDashboard: (id) => {
             clinicSystem.currentClinicId = id;
-            const c = mapManager.clinicsData.find(x => x.id == id); // جلب من البيانات المحملة
-            
-            document.getElementById('clinic-dynamic-content').innerHTML = `
+            const c = mapManager.clinicsData.find(x => x.id == id);
+            if(!c) return ui.showToast('العيادة غير موجودة', 'error');
+
+            const container = document.getElementById('clinic-dynamic-content');
+            container.innerHTML = `
                 <div style="background:white; padding:20px; border-radius:10px; margin-bottom:20px; display:flex; justify-content:space-between;">
-                    <div>
-                        <h1>${c.name}</h1>
-                        <p>${c.owner}</p>
-                    </div>
+                    <div><h1>${c.name}</h1><p>${c.owner}</p></div>
                     <button class="btn btn-success" onclick="clinicSystem.openPrescriptionModal()">
                         <i class="fa-solid fa-file-prescription"></i> صرف وصفة جديدة
                     </button>
@@ -117,7 +293,8 @@
         },
 
         openPrescriptionModal: () => {
-            document.getElementById('medicines-list').innerHTML = '';
+            const list = document.getElementById('medicines-list');
+            if(list) list.innerHTML = '';
             clinicSystem.addMedicineRow();
             ui.openModal('prescription-modal');
         },
@@ -128,10 +305,7 @@
                 <div class="med-item-card" id="med-row-${id}">
                     <div class="med-item-row">
                         <input type="text" placeholder="اسم الدواء" style="flex:2" required>
-                        <select style="flex:1">
-                            <option>1x يومياً</option>
-                            <option>2x يومياً</option>
-                        </select>
+                        <select style="flex:1"><option>1x يومياً</option><option>2x يومياً</option></select>
                         <button class="btn btn-danger btn-sm" onclick="document.getElementById('med-row-${id}').remove()">X</button>
                     </div>
                 </div>
@@ -141,6 +315,8 @@
 
         finalizePrescription: async () => {
             const rows = document.querySelectorAll('.med-item-card');
+            if(rows.length === 0) return ui.showToast('أضف دواء على الأقل', 'error');
+
             const medicines = [];
             rows.forEach(r => {
                 medicines.push({
@@ -149,15 +325,16 @@
                 });
             });
 
-            // إرسال البيانات للسيرفر
-            await api.addPrescription({
+            const res = await api.addPrescription({
                 clinic_id: clinicSystem.currentClinicId,
                 date: new Date().toISOString(),
                 details: medicines
             });
 
-            ui.closeModal('prescription-modal');
-            ui.showToast('تم حفظ الوصفة في قاعدة البيانات');
+            if(res && res.success) {
+                ui.closeModal('prescription-modal');
+                ui.showToast('تم حفظ الوصفة في قاعدة البيانات');
+            }
         }
     };
 
@@ -165,55 +342,68 @@
     const auth = {
         registerClinic: async (e) => {
             e.preventDefault();
+            const lat = document.getElementById('reg-lat').value;
+            const lng = document.getElementById('reg-lng').value;
+            if(!lat) return ui.showToast('حدد الموقع', 'error');
+
             const clinic = {
                 name: document.getElementById('reg-name').value,
                 type: document.getElementById('reg-type').value,
-                lat: parseFloat(document.getElementById('reg-lat').value),
-                lng: parseFloat(document.getElementById('reg-lng').value),
+                lat: parseFloat(lat),
+                lng: parseFloat(lng),
                 owner: "مالك جديد"
             };
 
-            await api.addClinic(clinic);
-            ui.closeModal('register-modal');
-            ui.showToast('تم التسجيل بنجاح');
-            mapManager.renderMarkers(); // إعادة تحميل الخريطة
-            e.target.reset();
+            const res = await api.addClinic(clinic);
+            if(res && res.success) {
+                ui.closeModal('register-modal');
+                ui.showToast('تم التسجيل بنجاح');
+                mapManager.renderMarkers();
+                e.target.reset();
+            }
         }
     };
 
     const adminSystem = {
         renderTable: async () => {
-            const clinics = await api.getClinics(); // جلب البيانات الحقيقية
+            const clinics = await api.getClinics();
             const tbody = document.getElementById('admin-table-body');
-            tbody.innerHTML = clinics.map(c => `
-                <tr>
-                    <td>${c.id}</td>
-                    <td><b>${c.name}</b></td>
-                    <td>${c.type}</td>
-                    <td>
-                        <button class="btn btn-danger btn-sm" onclick="adminSystem.deleteClinic(${c.id})">حذف</button>
-                    </td>
-                </tr>
-            `).join('');
+            if(tbody) {
+                tbody.innerHTML = clinics.map(c => `
+                    <tr>
+                        <td>${c.id}</td>
+                        <td><b>${c.name}</b></td>
+                        <td>${c.type}</td>
+                        <td><button class="btn btn-danger btn-sm" onclick="adminSystem.deleteClinic(${c.id})">حذف</button></td>
+                    </tr>
+                `).join('');
+            }
         },
-
         deleteClinic: async (id) => {
             if(confirm('هل أنت متأكد؟')) {
-                await api.deleteClinic(id);
-                adminSystem.renderTable();
-                ui.showToast('تم الحذف من السيرفر', 'error');
+                const res = await api.deleteClinic(id);
+                if(res && res.success) {
+                    adminSystem.renderTable();
+                    ui.showToast('تم الحذف', 'error');
+                }
             }
         }
     };
 
     // --- UTILS & ROUTER ---
     const ui = {
-        openModal: (id) => document.getElementById(id).style.display = 'flex',
-        closeModal: (id) => document.getElementById(id).style.display = 'none',
-        showToast: (msg) => {
+        openModal: (id) => {
+            const el = document.getElementById(id);
+            if(el) el.style.display = 'flex';
+        },
+        closeModal: (id) => {
+            const el = document.getElementById(id);
+            if(el) el.style.display = 'none';
+        },
+        showToast: (msg, type='success') => {
             const el = document.createElement('div');
             el.className = 'toast';
-            el.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${msg}`;
+            el.innerHTML = `<i class="fa-solid ${type==='success'?'fa-check-circle':'fa-exclamation-circle'}"></i> ${msg}`;
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 3000);
         }
@@ -222,15 +412,33 @@
     const router = {
         navigate: (view, params) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(`view-${view}`).classList.add('active');
+            const el = document.getElementById(`view-${view}`);
+            if(el) el.classList.add('active');
+
             if(view === 'home') mapManager.renderMarkers();
             if(view === 'clinic' && params) clinicSystem.renderDashboard(params);
-            if(view === 'admin') adminSystem.renderTable();
+            if(view === 'admin') {
+                // إضافة جدول الإدارة ديناميكياً إذا لم يكن موجوداً
+                let container = document.getElementById('clinic-dynamic-content');
+                if(!container) {
+                    container = document.createElement('div');
+                    container.innerHTML = `
+                        <div class="panel">
+                            <h3>إدارة العيادات</h3>
+                            <table class="admin-table" style="width:100%"><tbody id="admin-table-body"></tbody></table>
+                        </div>`;
+                    document.getElementById('view-admin').appendChild(container);
+                }
+                adminSystem.renderTable();
+            }
         }
     };
 
     window.addEventListener('DOMContentLoaded', () => {
+        console.log("App Loaded");
         mapManager.initMap();
         mapManager.renderMarkers();
     });
 </script>
+</body>
+</html>
